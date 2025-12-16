@@ -4,8 +4,9 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: index-postgresql
-    image: index-postgresql:latest
+    image: index-postgresql-timescaledb:latest
     restart: unless-stopped
+    command: postgres -c shared_preload_libraries=timescaledb
     environment:
       POSTGRES_DB: future_index
       POSTGRES_USER: postgres

@@ -1,15 +1,15 @@
-FROM postgres:16
+FROM timescale/timescaledb:latest-pg16
 
 LABEL name="index-postgresql"
-LABEL description="PostgreSQL database for Sierra Chart tick data (ES, NQ futures)"
+LABEL description="TimescaleDB database for Sierra Chart tick data (ES, NQ futures)"
 
 # Set environment variables
 ENV POSTGRES_DB=future_index
 ENV POSTGRES_USER=postgres
 ENV POSTGRES_PASSWORD=postgres
 
-# Copy initialization script
-COPY init.sql /docker-entrypoint-initdb.d/
+# Copy initialization scripts (runs in alphabetical order)
+COPY init/ /docker-entrypoint-initdb.d/
 
 # Expose PostgreSQL port
 EXPOSE 5432

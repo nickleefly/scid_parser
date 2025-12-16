@@ -121,7 +121,7 @@ class DBManager:
         insert_sql = f"""
             INSERT INTO "{table_name}" ({columns})
             VALUES ({placeholders})
-            ON CONFLICT (raw_time) DO NOTHING
+            ON CONFLICT (datetime, raw_time) DO NOTHING
         """
 
         inserted = 0
