@@ -122,6 +122,17 @@ class Checkpoint:
             self._data[symbol]["files"][filename] = {}
         self._data[symbol]["files"][filename]["completed"] = completed
 
+    def is_completed(self, symbol: str, file_path: str) -> bool:
+        """Check if a file has already been completed for a symbol."""
+        filename = Path(file_path).name
+        if symbol not in self._data:
+            return False
+        if "files" not in self._data[symbol]:
+            return False
+        if filename not in self._data[symbol]["files"]:
+            return False
+        return self._data[symbol]["files"][filename].get("completed", False)
+
 
 class DataSync:
     """
@@ -173,6 +184,11 @@ class DataSync:
             futures = []
             for contract_cfg in sym_config.contracts:
                 file_path = contract_cfg.file
+
+                # Check checkpoint
+                if self.checkpoint.is_completed(symbol, file_path):
+                    print(f"Skipping {Path(file_path).name} (already completed)")
+                    continue
 
                 # Create a task for each file
                 future = loop.run_in_executor(
