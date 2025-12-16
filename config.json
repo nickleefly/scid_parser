@@ -30,6 +30,26 @@
                     "file": "C:\\SierraChart\\Data\\ESZ18_FUT_CME.scid",
                     "start_date": "2018-09-13",
                     "end_date": "2018-12-13"
+                },
+                {
+                    "file": "C:\\SierraChart\\Data\\ESH19_FUT_CME.scid",
+                    "start_date": "2018-12-13",
+                    "end_date": "2019-03-07"
+                },
+                {
+                    "file": "C:\\SierraChart\\Data\\ESM19_FUT_CME.scid",
+                    "start_date": "2019-03-07",
+                    "end_date": "2019-06-13"
+                },
+                {
+                    "file": "C:\\SierraChart\\Data\\ESU19_FUT_CME.scid",
+                    "start_date": "2019-06-13",
+                    "end_date": "2019-09-12"
+                },
+                {
+                    "file": "C:\\SierraChart\\Data\\ESZ19_FUT_CME.scid",
+                    "start_date": "2019-09-12",
+                    "end_date": "2019-12-12"
                 }
             ]
         }

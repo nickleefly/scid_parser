@@ -59,6 +59,12 @@ class DBManager:
             password=self.config.password,
             database=self.config.database
         )
+        # Allow unlimited decompression for inserts into compressed chunks
+        try:
+            await self._conn.execute("SET timescaledb.max_tuples_decompressed_per_dml_transaction = 0;")
+        except Exception:
+            # Ignore if parameter doesn't exist (e.g. standard Postgres)
+            pass
         return self._conn
 
     async def create_pool(self, min_size: int = 5, max_size: int = 20) -> asyncpg.Pool:
@@ -96,25 +102,88 @@ class DBManager:
         self,
         table_name: str,
         records: List[Tuple],
-        batch_size: int = 1000
+        batch_size: int = 10000
     ) -> int:
         """
-        Insert tick records into the specified table.
+        Insert tick records into the specified table using COPY for high performance.
+
+        Uses a temporary staging table to handle ON CONFLICT DO NOTHING requirements
+        while leveraging the speed of the COPY protocol.
 
         Args:
             table_name: Table name (ES or NQ)
             records: List of tuples from SCIDRecord.to_db_tuple()
-            batch_size: Number of records per batch insert
+            batch_size: Not used in COPY mode but kept for compatibility
 
         Returns:
-            Number of records inserted
+            Number of records inserted (approximate, as ON CONFLICT ignores duplicates)
         """
         if not records:
             return 0
 
         conn = self._conn or await self.connect()
 
-        # Build INSERT statement with ON CONFLICT for upsert
+        # Create a unique temp table name
+        temp_table = f"temp_{table_name.lower()}_{id(records)}"
+
+        # Columns string for the query
+        columns_str = ", ".join(self.COLUMNS)
+
+        try:
+            # 1. Create temporary staging table
+            # We use LIKE to copy structure, but make it UNLOGGED for speed
+            await conn.execute(f"""
+                CREATE TEMP TABLE IF NOT EXISTS "{temp_table}"
+                (LIKE "{table_name}" INCLUDING DEFAULTS)
+            """)
+
+            # 2. Bulk load data into staging table using COPY
+            # This is significantly faster than INSERT
+            await conn.copy_records_to_table(
+                temp_table,
+                records=records,
+                columns=self.COLUMNS
+            )
+
+            # 3. Move from staging to actual table with conflict handling
+            # This preserves the idempotency required for resuming imports
+            query = f"""
+                INSERT INTO "{table_name}" ({columns_str})
+                SELECT {columns_str}
+                FROM "{temp_table}"
+                ON CONFLICT (datetime, raw_time) DO NOTHING
+            """
+
+            result = await conn.execute(query)
+
+            # Extract number of inserted rows from command tag (e.g., "INSERT 0 100")
+            inserted_count = 0
+            if result:
+                parts = result.split()
+                if len(parts) > 2:
+                    inserted_count = int(parts[-1])
+
+            return inserted_count
+
+        except Exception as e:
+            print(f"Error during bulk insert: {e}")
+            # Fallback to slow insert if COPY fails (e.g., type mismatch)
+            # This ensures robustness
+            return await self._fallback_insert(conn, table_name, records)
+        finally:
+            # Clean up temp table
+            try:
+                await conn.execute(f'DROP TABLE IF EXISTS "{temp_table}"')
+            except:
+                pass
+
+    async def _fallback_insert(
+        self,
+        conn: asyncpg.Connection,
+        table_name: str,
+        records: List[Tuple]
+    ) -> int:
+        """Fallback slow insert method for error recovery."""
         columns = ", ".join(self.COLUMNS)
         placeholders = ", ".join(f"${i+1}" for i in range(len(self.COLUMNS)))
 
@@ -125,23 +194,12 @@ class DBManager:
         """
 
         inserted = 0
-
-        # Process in batches
-        for i in range(0, len(records), batch_size):
-            batch = records[i:i + batch_size]
+        for record in records:
             try:
-                result = await conn.executemany(insert_sql, batch)
-                inserted += len(batch)
+                await conn.execute(insert_sql, *record)
+                inserted += 1
             except Exception as e:
-                print(f"Error inserting batch {i//batch_size}: {e}")
-                # Try inserting records one by one to find problematic ones
-                for record in batch:
-                    try:
-                        await conn.execute(insert_sql, *record)
-                        inserted += 1
-                    except Exception as record_error:
-                        print(f"  Skipping record: {record_error}")
-
+                print(f"  Skipping bad record: {e}")
         return inserted
 
     async def get_last_timestamp(self, table_name: str) -> Optional[int]:

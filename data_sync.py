@@ -1,36 +1,99 @@
-"""
-Data Synchronization for SCID to PostgreSQL.
-
-Imports tick data from SCID files into ES and NQ tables.
-Supports checkpointing for incremental updates.
-"""
-
 import asyncio
 import json
 import time
+import concurrent.futures
 from pathlib import Path
 from typing import Dict, List, Optional
 import datetime
+import multiprocessing
 
 from parser import SCIDParser, MultiContractParser, SCIDRecord
 from db_manager import DBManager, DBConfig
 from config import Config
 
 
+def process_contract_worker(
+    db_config_data: dict,
+    symbol: str,
+    contract_file: str,
+    start_date_str: Optional[str],
+    end_date_str: Optional[str],
+    batch_size: int,
+    table_name: str
+) -> Dict:
+    """
+    Worker function to process a single contract file in a separate process.
+    Initializes its own DB connection and Event Loop.
+    """
+    async def _async_work():
+        db_cfg = DBConfig(**db_config_data)
+        db = DBManager(db_cfg)
+        await db.connect()
+
+        stats = {
+            "contract": Path(contract_file).name,
+            "processed": 0,
+            "inserted": 0,
+            "elapsed": 0.0
+        }
+
+        try:
+            if not Path(contract_file).exists():
+                print(f"File not found: {contract_file}")
+                return stats
+
+            start_time = time.time()
+            parser = SCIDParser(contract_file)
+
+            # Parse dates
+            s_date = datetime.datetime.strptime(start_date_str, "%Y-%m-%d").replace(tzinfo=datetime.timezone.utc) if start_date_str else None
+            e_date = datetime.datetime.strptime(end_date_str, "%Y-%m-%d").replace(tzinfo=datetime.timezone.utc) if end_date_str else None
+
+            print(f"Starting import: {Path(contract_file).name} -> {table_name}")
+
+            batch = []
+
+            # Use a local counter for progress updates in this process
+            last_print = 0
+
+            for record in parser.read_records(start_date=s_date, end_date=e_date, buffer_size=256*1024):
+                batch.append(record.to_db_tuple())
+                stats["processed"] += 1
+
+                if len(batch) >= batch_size:
+                    inserted = await db.insert_records(table_name, batch)
+                    stats["inserted"] += inserted
+                    batch = []
+
+                    if stats["processed"] - last_print >= 100000:
+                        print(f"[{symbol}] {Path(contract_file).name}: {stats['processed']:,} rows processed")
+                        last_print = stats["processed"]
+
+            if batch:
+                inserted = await db.insert_records(table_name, batch)
+                stats["inserted"] += inserted
+
+            stats["elapsed"] = time.time() - start_time
+            print(f"Completed {Path(contract_file).name}: {stats['inserted']:,} inserted in {stats['elapsed']:.2f}s")
+
+        except Exception as e:
+            print(f"Error processing {contract_file}: {e}")
+        finally:
+            await db.close()
+
+        return stats
+
+    # Run the async worker in this process
+    return asyncio.run(_async_work())
+
+
 class Checkpoint:
     """
     Manages checkpoint state for incremental imports.
-
     Tracks last position per file to support resumable imports.
     """
 
     def __init__(self, checkpoint_path: str = None):
-        """
-        Initialize checkpoint manager.
-
-        Args:
-            checkpoint_path: Path to checkpoint.json
-        """
         if checkpoint_path is None:
             checkpoint_path = Path(__file__).parent / "checkpoint.json"
 
@@ -39,7 +102,6 @@ class Checkpoint:
         self.load()
 
     def load(self) -> None:
-        """Load checkpoint from file."""
         if self.path.exists():
             with open(self.path, 'r') as f:
                 self._data = json.load(f)
@@ -47,91 +109,38 @@ class Checkpoint:
             self._data = {}
 
     def save(self) -> None:
-        """Save checkpoint to file."""
         with open(self.path, 'w') as f:
             json.dump(self._data, f, indent=4)
 
-    def get_last_position(self, symbol: str, file_path: str) -> int:
-        """Get last processed position for a file."""
-        filename = Path(file_path).name
-        return self._data.get(symbol, {}).get("files", {}).get(filename, {}).get("last_position", 0)
-
-    def set_last_position(self, symbol: str, file_path: str, position: int) -> None:
-        """Set last processed position for a file."""
-        filename = Path(file_path).name
-
-        if symbol not in self._data:
-            self._data[symbol] = {"files": {}}
-        if "files" not in self._data[symbol]:
-            self._data[symbol]["files"] = {}
-        if filename not in self._data[symbol]["files"]:
-            self._data[symbol]["files"][filename] = {}
-
-        self._data[symbol]["files"][filename]["last_position"] = position
-        self._data[symbol]["files"][filename]["last_updated"] = datetime.datetime.now().isoformat()
-
-    def is_completed(self, symbol: str, file_path: str) -> bool:
-        """Check if a file has been fully processed."""
-        filename = Path(file_path).name
-        return self._data.get(symbol, {}).get("files", {}).get(filename, {}).get("completed", False)
-
     def set_completed(self, symbol: str, file_path: str, completed: bool = True) -> None:
-        """Mark a file as completed."""
         filename = Path(file_path).name
-
         if symbol not in self._data:
             self._data[symbol] = {"files": {}}
         if "files" not in self._data[symbol]:
             self._data[symbol]["files"] = {}
         if filename not in self._data[symbol]["files"]:
             self._data[symbol]["files"][filename] = {}
-
         self._data[symbol]["files"][filename]["completed"] = completed
 
 
 class DataSync:
     """
     Synchronizes SCID tick data to PostgreSQL.
-
     Reads from configured SCID files and inserts into ES/NQ tables.
     """
 
     def __init__(self, config: Config = None, checkpoint: Checkpoint = None):
-        """
-        Initialize data synchronizer.
-
-        Args:
-            config: Configuration object
-            checkpoint: Checkpoint manager
-        """
         self.config = config or Config()
         self.checkpoint = checkpoint or Checkpoint()
-
-        db_config = self.config.database
-        self.db = DBManager(DBConfig(
-            host=db_config.host,
-            port=db_config.port,
-            user=db_config.user,
-            password=db_config.password,
-            database=db_config.database
-        ))
 
     async def sync_symbol(
         self,
         symbol: str,
-        batch_size: int = 10000,
+        batch_size: int = 100000,
         progress_interval: int = 100000
     ) -> Dict:
         """
-        Sync all contracts for a symbol.
-
-        Args:
-            symbol: Symbol name (ES, NQ)
-            batch_size: Records per database batch insert
-            progress_interval: Records between progress updates
-
-        Returns:
-            Dict with import statistics
+        Sync all contracts for a symbol in PARALLEL.
         """
         sym_config = self.config.get_symbol_config(symbol)
         if not sym_config:
@@ -140,81 +149,56 @@ class DataSync:
 
         table_name = sym_config.table_name
         print(f"\n{'='*60}")
-        print(f"Syncing {symbol} ({len(sym_config.contracts)} contracts)")
+        print(f"Syncing {symbol} ({len(sym_config.contracts)} contracts) in PARALLEL")
         print(f"Table: {table_name}")
         print(f"{'='*60}")
 
-        total_inserted = 0
-        total_processed = 0
         start_time = time.time()
 
-        await self.db.connect()
+        # Prepare arguments for workers
+        tasks = []
+        db_config_dict = {
+            "host": self.config.database.host,
+            "port": self.config.database.port,
+            "user": self.config.database.user,
+            "password": self.config.database.password,
+            "database": self.config.database.database
+        }
 
-        try:
+        loop = asyncio.get_running_loop()
+        # Limit workers to CPU count to avoid thrashing
+        max_workers = min(multiprocessing.cpu_count(), len(sym_config.contracts))
+
+        with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
+            futures = []
             for contract_cfg in sym_config.contracts:
                 file_path = contract_cfg.file
 
-                if not Path(file_path).exists():
-                    print(f"\nWarning: File not found: {file_path}")
-                    continue
+                # Create a task for each file
+                future = loop.run_in_executor(
+                    executor,
+                    process_contract_worker,
+                    db_config_dict,
+                    symbol,
+                    file_path,
+                    contract_cfg.start_date,
+                    contract_cfg.end_date,
+                    batch_size,
+                    table_name
+                )
+                futures.append(future)
 
-                # Parse contract name from file
-                parser = SCIDParser(file_path)
-                contract_name = parser.contract
+            # Wait for all files to complete
+            results = await asyncio.gather(*futures)
 
-                print(f"\n--- Contract: {contract_name} ---")
-                print(f"File: {file_path}")
-                print(f"Date filter: {contract_cfg.start_date} to {contract_cfg.end_date}")
+        # Aggregating results
+        total_processed = sum(r['processed'] for r in results)
+        total_inserted = sum(r['inserted'] for r in results)
 
-                # Parse dates
-                start_date = None
-                end_date = None
-
-                if contract_cfg.start_date:
-                    start_date = datetime.datetime.strptime(
-                        contract_cfg.start_date, "%Y-%m-%d"
-                    ).replace(tzinfo=datetime.timezone.utc)
-
-                if contract_cfg.end_date:
-                    end_date = datetime.datetime.strptime(
-                        contract_cfg.end_date, "%Y-%m-%d"
-                    ).replace(tzinfo=datetime.timezone.utc)
-
-                # Collect records in batches
-                batch: List[tuple] = []
-                contract_count = 0
-
-                for record in parser.read_records(start_date=start_date, end_date=end_date):
-                    batch.append(record.to_db_tuple())
-                    contract_count += 1
-                    total_processed += 1
-
-                    # Insert batch when full
-                    if len(batch) >= batch_size:
-                        inserted = await self.db.insert_records(table_name, batch)
-                        total_inserted += inserted
-                        batch = []
-
-                    # Progress update
-                    if total_processed % progress_interval == 0:
-                        elapsed = time.time() - start_time
-                        rate = total_processed / elapsed if elapsed > 0 else 0
-                        print(f"  Progress: {total_processed:,} processed, {total_inserted:,} inserted ({rate:,.0f} rec/sec)")
-
-                # Insert remaining records
-                if batch:
-                    inserted = await self.db.insert_records(table_name, batch)
-                    total_inserted += inserted
-
-                print(f"  Contract {contract_name}: {contract_count:,} records")
-
-                # Mark as completed
-                self.checkpoint.set_completed(symbol, file_path, True)
-
-            self.checkpoint.save()
-
-        finally:
-            await self.db.close()
+        # Update checkpoints
+        for contract_cfg in sym_config.contracts:
+            self.checkpoint.set_completed(symbol, contract_cfg.file, True)
+        self.checkpoint.save()
 
         elapsed = time.time() - start_time
 
@@ -232,26 +216,15 @@ class DataSync:
         print(f"  Total Processed: {total_processed:,}")
         print(f"  Total Inserted:  {total_inserted:,}")
         print(f"  Time Elapsed:    {elapsed:.2f} seconds")
-        print(f"  Rate:            {stats['records_per_second']:,.0f} records/sec")
+        print(f"  Rate:            {stats['records_per_second']:,.0f} records/sec (Aggregate)")
         print(f"{'='*60}")
 
         return stats
 
-    async def sync_all(self, batch_size: int = 10000) -> Dict:
-        """
-        Sync all configured symbols.
-
-        Args:
-            batch_size: Records per database batch insert
-
-        Returns:
-            Dict with statistics for all symbols
-        """
+    async def sync_all(self, batch_size: int = 100000) -> Dict:
         results = {}
-
         for symbol in self.config.get_all_symbols():
             results[symbol] = await self.sync_symbol(symbol, batch_size=batch_size)
-
         return results
 
 
@@ -261,7 +234,7 @@ async def main():
 
     parser = argparse.ArgumentParser(description="Sync SCID tick data to PostgreSQL")
     parser.add_argument("--symbol", "-s", help="Symbol to sync (ES, NQ). If not specified, syncs all.")
-    parser.add_argument("--batch-size", "-b", type=int, default=10000, help="Batch size for inserts")
+    parser.add_argument("--batch-size", "-b", type=int, default=100000, help="Batch size for inserts (default: 100000)")
     parser.add_argument("--config", "-c", help="Path to config.json")
 
     args = parser.parse_args()

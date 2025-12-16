@@ -158,7 +158,8 @@ class SCIDParser:
         self,
         start_date: Optional[datetime.datetime] = None,
         end_date: Optional[datetime.datetime] = None,
-        offset: int = 0
+        offset: int = 0,
+        buffer_size: int = 256 * 1024  # 256KB chunks
     ) -> Generator[SCIDRecord, None, None]:
         """
         Generator that yields SCIDRecord objects.
@@ -167,6 +168,7 @@ class SCIDParser:
             start_date: Optional start date filter (inclusive)
             end_date: Optional end date filter (exclusive)
             offset: Byte offset to start reading from (for resuming)
+            buffer_size: Size of buffer to read (must be multiple of 40)
 
         Yields:
             SCIDRecord objects matching the date filter
@@ -174,48 +176,64 @@ class SCIDParser:
         if not os.path.exists(self.file_path):
             raise FileNotFoundError(f"File not found: {self.file_path}")
 
+        # Ensure buffer size is aligned to record size
+        if buffer_size % RECORD_SIZE != 0:
+            buffer_size = (buffer_size // RECORD_SIZE) * RECORD_SIZE
+
         with open(self.file_path, 'rb') as f:
             # Parse header
             self.parse_header(f)
 
             # Seek to offset if provided (must be >= HEADER_SIZE)
-            if offset > HEADER_SIZE:
-                f.seek(offset)
+            current_pos = max(HEADER_SIZE, offset)
+            f.seek(current_pos)
 
-            # Read records
+            # Pre-calculate date timestamps for faster filtering
+            # Note: SC timestamp is microseconds since 1899-12-30
+            # Converting filter dates to raw int can speed up comparison if we wanted to
+            # but we need to convert to datetime for the object anyway.
+
             while True:
-                buffer = f.read(RECORD_SIZE)
-
-                if len(buffer) < RECORD_SIZE:
+                buffer = f.read(buffer_size)
+                if not buffer:
                     break
 
-                # Unpack: <Q4f4I = little-endian, uint64, 4 floats, 4 uint32
-                fields = struct.unpack(RECORD_FORMAT, buffer)
+                # Handle cases where read returns less than buffer_size but not empty
+                # Ensure we only process complete records
+                valid_bytes = len(buffer) - (len(buffer) % RECORD_SIZE)
+                if valid_bytes == 0:
+                    break
 
-                raw_time = fields[0]
-                dt_val = self._convert_sc_timestamp(raw_time)
+                # Process the chunk
+                for fields in struct.iter_unpack(RECORD_FORMAT, buffer[:valid_bytes]):
+                    raw_time = fields[0]
+                    dt_val = self._convert_sc_timestamp(raw_time)
 
-                # Apply date filters
-                if start_date and dt_val < start_date:
-                    continue
-                if end_date and dt_val >= end_date:
-                    continue
+                    # Apply date filters
+                    if start_date and dt_val < start_date:
+                        continue
+                    if end_date and dt_val >= end_date:
+                        continue
 
-                record = SCIDRecord(
-                    datetime=dt_val,
-                    raw_time=raw_time,
-                    open=fields[1],
-                    high=fields[2],
-                    low=fields[3],
-                    close=fields[4],
-                    num_trades=fields[5],
-                    volume=fields[6],
-                    bid_volume=fields[7],
-                    ask_volume=fields[8],
-                    contract=self.contract
-                )
+                    # Yield record
+                    yield SCIDRecord(
+                        datetime=dt_val,
+                        raw_time=raw_time,
+                        open=fields[1],
+                        high=fields[2],
+                        low=fields[3],
+                        close=fields[4],
+                        num_trades=fields[5],
+                        volume=fields[6],
+                        bid_volume=fields[7],
+                        ask_volume=fields[8],
+                        contract=self.contract
+                    )
 
-                yield record
+                # If we read a partial record at the end of file (shouldn't happen for valid SCID), stop
+                if len(buffer) < buffer_size:
+                    break
+
 
     def get_file_position(self, f) -> int:
         """Get current file position for checkpointing."""
