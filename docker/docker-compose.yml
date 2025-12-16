@@ -1,0 +1,22 @@
+services:
+  index-postgresql:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: index-postgresql
+    image: index-postgresql:latest
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: future_index
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - D:/futureindexdb:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d future_index" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
