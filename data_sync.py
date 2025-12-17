@@ -2,6 +2,8 @@ import asyncio
 import json
 import time
 import concurrent.futures
+import threading
+import queue
 from pathlib import Path
 from typing import Dict, List, Optional
 import datetime
@@ -23,7 +25,7 @@ def process_contract_worker(
 ) -> Dict:
     """
     Worker function to process a single contract file in a separate process.
-    Initializes its own DB connection and Event Loop.
+    Uses pipeline parallelism: one thread parses while async loop inserts.
     """
     async def _async_work():
         db_cfg = DBConfig(**db_config_data)
@@ -43,35 +45,73 @@ def process_contract_worker(
                 return stats
 
             start_time = time.time()
-            parser = SCIDParser(contract_file)
 
             # Parse dates
             s_date = datetime.datetime.strptime(start_date_str, "%Y-%m-%d").replace(tzinfo=datetime.timezone.utc) if start_date_str else None
             e_date = datetime.datetime.strptime(end_date_str, "%Y-%m-%d").replace(tzinfo=datetime.timezone.utc) if end_date_str else None
 
-            print(f"Starting import: {Path(contract_file).name} -> {table_name}")
+            print(f"Starting import: {Path(contract_file).name} -> {table_name} (pipelined)")
 
-            batch = []
+            # Queue for batches (max 3 batches buffered to limit memory)
+            batch_queue = queue.Queue(maxsize=3)
+            parse_done = threading.Event()
+            parse_error = [None]  # Use list to allow mutation in thread
 
-            # Use a local counter for progress updates in this process
+            def parser_thread():
+                """Background thread that reads and parses SCID file into batches."""
+                try:
+                    parser = SCIDParser(contract_file)
+                    batch = []
+                    count = 0
+
+                    for record in parser.read_records(start_date=s_date, end_date=e_date, buffer_size=256*1024):
+                        batch.append(record.to_db_tuple())
+                        count += 1
+
+                        if len(batch) >= batch_size:
+                            batch_queue.put((batch, count))
+                            batch = []
+
+                    # Put remaining batch
+                    if batch:
+                        batch_queue.put((batch, count))
+
+                except Exception as e:
+                    parse_error[0] = e
+                finally:
+                    parse_done.set()
+
+            # Start parser thread
+            parser_t = threading.Thread(target=parser_thread, daemon=True)
+            parser_t.start()
+
+            # Main async loop consumes batches and inserts
             last_print = 0
 
-            for record in parser.read_records(start_date=s_date, end_date=e_date, buffer_size=256*1024):
-                batch.append(record.to_db_tuple())
-                stats["processed"] += 1
+            while True:
+                # Check if parsing is done and queue is empty
+                if parse_done.is_set() and batch_queue.empty():
+                    break
 
-                if len(batch) >= batch_size:
-                    inserted = await db.insert_records(table_name, batch)
-                    stats["inserted"] += inserted
-                    batch = []
+                try:
+                    # Get batch with timeout to allow checking parse_done
+                    batch, count = batch_queue.get(timeout=0.1)
+                except queue.Empty:
+                    continue
 
-                    if stats["processed"] - last_print >= 100000:
-                        print(f"[{symbol}] {Path(contract_file).name}: {stats['processed']:,} rows processed")
-                        last_print = stats["processed"]
-
-            if batch:
+                stats["processed"] = count
                 inserted = await db.insert_records(table_name, batch)
                 stats["inserted"] += inserted
+
+                if stats["processed"] - last_print >= 100000:
+                    print(f"[{symbol}] {Path(contract_file).name}: {stats['processed']:,} rows processed")
+                    last_print = stats["processed"]
+
+            # Wait for parser thread to finish
+            parser_t.join()
+
+            if parse_error[0]:
+                raise parse_error[0]
 
             stats["elapsed"] = time.time() - start_time
             print(f"Completed {Path(contract_file).name}: {stats['inserted']:,} inserted in {stats['elapsed']:.2f}s")

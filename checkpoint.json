@@ -12,6 +12,12 @@
             },
             "ESZ18_FUT_CME.scid": {
                 "completed": true
+            },
+            "ESH19_FUT_CME.scid": {
+                "completed": true
+            },
+            "ESM19_FUT_CME.scid": {
+                "completed": true
             }
         }
     }

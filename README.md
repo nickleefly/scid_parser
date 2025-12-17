@@ -2,6 +2,14 @@
 
 This project manages the import of Sierra Chart Intraday Data (.scid) into a TimescaleDB (PostgreSQL) database.
 
+| Feature | TimescaleDB | ClickHouse | HDF5 / Parquet |
+| :--- | :--- | :--- | :--- |
+| **Disk Size (100M Ticks)** | ~400 MB (Compressed) | ~300 MB | ~500 MB |
+| **Ingest Speed** | High (50k-100k rows/sec) | Extreme (Millions/sec) | N/A (File I/O speed) |
+| **Query/Backtest Speed** | Fast | Instant | Instant (after load) |
+| **SQL Support** | Full PostgreSQL | Good (Analytical) | No (Python/API only) |
+| **Management** | Easy (It's just Postgres) | Medium (Cluster mgmt) | Zero (It's a file) |
+
 ## How to Run
 
 ### 1. Prerequisites
@@ -58,6 +66,22 @@ python data_sync.py
 python data_sync.py --symbol ES
 ```
 The script supports resuming from where it left off (via `checkpoint.json`).
+
+### 6. Fast Import Workflow (Recommended for Large Imports)
+For fastest import speed, disable compression before importing and re-enable after:
+
+```bash
+# Step 1: Prepare database (disable compression policies)
+cat prepare_import.sql | docker-compose exec -T index-postgresql psql -U postgres -d future_index
+
+# Step 2: Run the import
+python data_sync.py
+
+# Step 3: Finalize (re-enable compression and compress all data)
+cat finalize_import.sql | docker-compose exec -T index-postgresql psql -U postgres -d future_index
+```
+
+**Why this is faster:** Inserting into compressed TimescaleDB chunks requires decompress → insert → recompress, which is slow. Disabling compression during import avoids this overhead.
 
 ## Database Verification & Monitoring
 
