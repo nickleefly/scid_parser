@@ -33,7 +33,7 @@ services:
       - "8123:8123" # HTTP interface
       - "9000:9000" # Native interface
     volumes:
-      - clickhouse_data:/var/lib/clickhouse
+      - D:/clickhousedb:/var/lib/clickhouse
       - ./clickhouse-config/users.xml:/etc/clickhouse-server/users.d/users.xml
     ulimits:
       nofile:
@@ -45,6 +45,3 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
-
-volumes:
-  clickhouse_data:

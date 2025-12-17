@@ -31,10 +31,8 @@ The database will be available at `localhost:5433` with user/password `postgres`
 
 **Note**: If this is a fresh installation or you are migrating existing data to TimescaleDB, you may need to run the migration script:
 ```bash
-docker-compose exec index-postgresql psql -U postgres -d future_index -f /migrate-to-timescale.sql
-# Note: You'll need to copy the SQL file into the container or mount it first if it's not already available.
-# Alternatively, read the file and pipe it:
-cat migrate-to-timescale.sql | docker-compose exec -T index-postgresql psql -U postgres -d future_index
+# Read the file and pipe it:
+cat psql/migrate-to-timescale.sql | docker-compose exec -T index-postgresql psql -U postgres -d future_index
 ```
 
 ### 4. Configuration
@@ -72,13 +70,13 @@ For fastest import speed, disable compression before importing and re-enable aft
 
 ```bash
 # Step 1: Prepare database (disable compression policies)
-cat prepare_import.sql | docker-compose exec -T index-postgresql psql -U postgres -d future_index
+cat psql/prepare_import.sql | docker-compose exec -T index-postgresql psql -U postgres -d future_index
 
 # Step 2: Run the import
 python data_sync.py
 
 # Step 3: Finalize (re-enable compression and compress all data)
-cat finalize_import.sql | docker-compose exec -T index-postgresql psql -U postgres -d future_index
+cat psql/finalize_import.sql | docker-compose exec -T index-postgresql psql -U postgres -d future_index
 ```
 
 **Why this is faster:** Inserting into compressed TimescaleDB chunks requires decompress → insert → recompress, which is slow. Disabling compression during import avoids this overhead.
