@@ -1,0 +1,14 @@
+FROM clickhouse/clickhouse-server:latest
+
+LABEL name="index-clickhouse"
+LABEL description="ClickHouse database for Sierra Chart tick data (ES, NQ futures)"
+
+# Copy initialization scripts (runs in alphabetical order)
+COPY init-clickhouse/ /docker-entrypoint-initdb.d/
+
+# Expose HTTP and native ports
+EXPOSE 8123 9000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD clickhouse-client --query "SELECT 1" || exit 1

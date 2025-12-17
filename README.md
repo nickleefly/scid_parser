@@ -137,3 +137,48 @@ If you need to update constraints, remember that TimescaleDB hypertables require
 ```sql
 ALTER TABLE "ES" ADD CONSTRAINT es_unique_tick UNIQUE (datetime, raw_time);
 ```
+
+---
+
+## ClickHouse Setup (Alternative)
+
+ClickHouse offers extreme ingest speeds (millions of rows/sec) and is optimized for analytical queries.
+
+### 1. Start ClickHouse Container
+```bash
+docker-compose up -d index-clickhouse
+```
+The database will be available at `localhost:8123` (HTTP) and `localhost:9000` (native).
+
+### 2. Install ClickHouse Driver
+```bash
+pip install clickhouse-driver
+```
+
+### 3. Run Import to ClickHouse
+```bash
+# Sync all symbols
+python clickhouse_sync.py
+
+# Sync specific symbol
+python clickhouse_sync.py --symbol ES
+```
+Progress is tracked in `checkpoint_clickhouse.json` (separate from TimescaleDB checkpoint).
+
+### 4. Verify Data
+```bash
+# Check record count
+docker-compose exec index-clickhouse clickhouse-client --query "SELECT count() FROM future_index.ES"
+
+# View sample data
+docker-compose exec index-clickhouse clickhouse-client --query "SELECT * FROM future_index.ES ORDER BY datetime DESC LIMIT 5"
+
+# Check table size
+docker-compose exec index-clickhouse clickhouse-client --query "SELECT formatReadableSize(sum(bytes_on_disk)) FROM system.parts WHERE database = 'future_index'"
+```
+
+### 5. Deduplication
+Tables use `ReplacingMergeTree` engine for safe resume. If you stop mid-import and restart, duplicates may exist temporarily. Run this to deduplicate:
+```bash
+docker-compose exec index-clickhouse clickhouse-client --query "OPTIMIZE TABLE future_index.ES FINAL"
+```
