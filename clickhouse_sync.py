@@ -233,9 +233,12 @@ class ClickHouseSync:
             total_processed += result['processed']
             total_inserted += result['inserted']
 
-            # Mark as completed
-            self.checkpoint.set_completed(symbol, file_path, True)
-            self.checkpoint.save()
+            if result['processed'] > 0 and result['inserted'] > 0:
+                # Mark as completed
+                self.checkpoint.set_completed(symbol, file_path, True)
+                self.checkpoint.save()
+            else:
+                print(f"Failed to sync {Path(file_path).name} (no rows inserted)")
 
         elapsed = time.time() - start_time
 
