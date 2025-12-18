@@ -116,6 +116,75 @@ docker exec -it index-clickhouse clickhouse-client
 # Run a query from command line and save to CSV
 docker exec index-clickhouse clickhouse-client --query "SELECT * FROM future_index.ES LIMIT 1000" --format CSV > export.csv
 
-# Import from CSV (example)
-# Get-Content data.csv | docker exec -i index-clickhouse clickhouse-client --query "INSERT INTO future_index.ES FORMAT CSV"
+### 1-Minute Aggregation
+
+To efficiently query 1-minute OHLCV candles from your tick data:
+
+> **Note:** In SCID tick data, the `open` field acts as a marker (often 0 or a large negative number for bundle indicators), while the `close` field holds the actual trade price. Therefore, we use `close` to calculate the Open, High, and Low of the candle.
+
+```sql
+SELECT
+    candle_time,
+    open,
+    high,
+    low,
+    close,
+    volume,
+    trades
+FROM future_index.ES_1min
+WHERE candle_time >= '2018-01-01' AND candle_time < '2018-01-02'
+ORDER BY candle_time ASC;
+```
+
+#### Materialized View (Recommended for Speed)
+
+For instant results on massive datasets, create a Materialized View that pre-calculates this in the background.
+
+```sql
+```sql
+-- 1. Create the target table for storing 1-min bars
+CREATE TABLE future_index.ES_1min
+(
+    candle_time DateTime,
+    open Float64,
+    high Float64,
+    low Float64,
+    close Float64,
+    volume UInt64,
+    trades UInt64
+)
+ENGINE = MergeTree()
+PARTITION BY toYYYYMM(candle_time)
+ORDER BY candle_time;
+
+-- 2. Create the Materialized View to update it automatically
+CREATE MATERIALIZED VIEW future_index.ES_1min_mv TO future_index.ES_1min
+AS SELECT
+    toStartOfMinute(datetime) AS candle_time,
+    argMin(close, (datetime, raw_time)) AS open,
+    max(high) AS high,
+    min(low) AS low,
+    argMax(close, (datetime, raw_time)) AS close,
+    sum(volume) AS volume,
+    sum(num_trades) AS trades
+FROM future_index.ES
+GROUP BY candle_time;
+```
+
+### Backfill History
+
+The Materialized View only processes **newly inserted** data. To populate the table with existing history:
+
+```sql
+INSERT INTO future_index.ES_1min
+SELECT
+    toStartOfMinute(datetime) AS candle_time,
+    argMin(close, (datetime, raw_time)) AS open,
+    max(high) AS high,
+    min(low) AS low,
+    argMax(close, (datetime, raw_time)) AS close,
+    sum(volume) AS volume,
+    sum(num_trades) AS trades
+FROM future_index.ES
+GROUP BY candle_time;
 ```
