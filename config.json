@@ -13,43 +13,163 @@
             "contracts": [
                 {
                     "file": "C:\\SierraChart\\Data\\ESH18_FUT_CME.scid",
-                    "start_date": "2017-12-14",
-                    "end_date": "2018-03-08"
+                    "start_date": "2017-12-11",
+                    "end_date": "2018-03-12"
                 },
                 {
                     "file": "C:\\SierraChart\\Data\\ESM18_FUT_CME.scid",
-                    "start_date": "2018-03-08",
-                    "end_date": "2018-06-07"
+                    "start_date": "2018-03-12",
+                    "end_date": "2018-06-11"
                 },
                 {
                     "file": "C:\\SierraChart\\Data\\ESU18_FUT_CME.scid",
-                    "start_date": "2018-06-07",
-                    "end_date": "2018-09-13"
+                    "start_date": "2018-06-11",
+                    "end_date": "2018-09-17"
                 },
                 {
                     "file": "C:\\SierraChart\\Data\\ESZ18_FUT_CME.scid",
-                    "start_date": "2018-09-13",
-                    "end_date": "2018-12-13"
+                    "start_date": "2018-09-17",
+                    "end_date": "2018-12-17"
                 },
                 {
                     "file": "C:\\SierraChart\\Data\\ESH19_FUT_CME.scid",
-                    "start_date": "2018-12-13",
-                    "end_date": "2019-03-07"
+                    "start_date": "2018-12-17",
+                    "end_date": "2019-03-11"
                 },
                 {
                     "file": "C:\\SierraChart\\Data\\ESM19_FUT_CME.scid",
-                    "start_date": "2019-03-07",
-                    "end_date": "2019-06-13"
+                    "start_date": "2019-03-11",
+                    "end_date": "2019-06-17"
                 },
                 {
                     "file": "C:\\SierraChart\\Data\\ESU19_FUT_CME.scid",
-                    "start_date": "2019-06-13",
-                    "end_date": "2019-09-12"
+                    "start_date": "2019-06-17",
+                    "end_date": "2019-09-16"
                 },
                 {
                     "file": "C:\\SierraChart\\Data\\ESZ19_FUT_CME.scid",
-                    "start_date": "2019-09-12",
-                    "end_date": "2019-12-12"
+                    "start_date": "2019-09-16",
+                    "end_date": "2019-12-16"
+                },
+                {
+                    "file": "C:\\SierraChart\\Data\\ESH20_FUT_CME.scid",
+                    "start_date": "2019-12-16",
+                    "end_date": "2020-03-16"
+                },
+                {
+                    "file": "C:\\SierraChart\\Data\\ESM20_FUT_CME.scid",
+                    "start_date": "2020-03-16",
+                    "end_date": "2020-06-15"
+                },
+                {
+                    "file": "C:\\SierraChart\\Data\\ESU20_FUT_CME.scid",
+                    "start_date": "2020-06-15",
+                    "end_date": "2020-09-14"
+                },
+                {
+                    "file": "C:\\SierraChart\\Data\\ESZ20_FUT_CME.scid",
+                    "start_date": "2020-09-14",
+                    "end_date": "2020-12-14"
+                },
+                {
+                    "file": "C:\\SierraChart\\Data\\ESH21_FUT_CME.scid",
+                    "start_date": "2020-12-14",
+                    "end_date": "2021-03-15"
+                },
+                {
+                    "file": "C:\\SierraChart\\Data\\ESM21_FUT_CME.scid",
+                    "start_date": "2021-03-15",
+                    "end_date": "2021-06-14"
+                },
+                {
+                    "file": "C:\\SierraChart\\Data\\ESU21_FUT_CME.scid",
+                    "start_date": "2021-06-14",
+                    "end_date": "2021-09-13"
+                },
+                {
+                    "file": "C:\\SierraChart\\Data\\ESZ21_FUT_CME.scid",
+                    "start_date": "2021-09-13",
+                    "end_date": "2021-12-13"
+                },
+                {
+                    "file": "C:\\SierraChart\\Data\\ESH22_FUT_CME.scid",
+                    "start_date": "2021-12-13",
+                    "end_date": "2022-03-14"
+                },
+                {
+                    "file": "C:\\SierraChart\\Data\\ESM22_FUT_CME.scid",
+                    "start_date": "2022-03-14",
+                    "end_date": "2022-06-13"
+                },
+                {
+                    "file": "C:\\SierraChart\\Data\\ESU22_FUT_CME.scid",
+                    "start_date": "2022-06-13",
+                    "end_date": "2022-09-12"
+                },
+                {
+                    "file": "C:\\SierraChart\\Data\\ESZ22_FUT_CME.scid",
+                    "start_date": "2022-09-12",
+                    "end_date": "2022-12-12"
+                },
+                {
+                    "file": "C:\\SierraChart\\Data\\ESH23_FUT_CME.scid",
+                    "start_date": "2022-12-12",
+                    "end_date": "2023-03-13"
+                },
+                {
+                    "file": "C:\\SierraChart\\Data\\ESM23_FUT_CME.scid",
+                    "start_date": "2023-03-13",
+                    "end_date": "2023-06-12"
+                },
+                {
+                    "file": "C:\\SierraChart\\Data\\ESU23_FUT_CME.scid",
+                    "start_date": "2023-06-12",
+                    "end_date": "2023-09-11"
+                },
+                {
+                    "file": "C:\\SierraChart\\Data\\ESZ23_FUT_CME.scid",
+                    "start_date": "2023-09-11",
+                    "end_date": "2023-12-11"
+                },
+                {
+                    "file": "C:\\SierraChart\\Data\\ESH24_FUT_CME.scid",
+                    "start_date": "2023-12-11",
+                    "end_date": "2024-03-11"
+                },
+                {
+                    "file": "C:\\SierraChart\\Data\\ESM24_FUT_CME.scid",
+                    "start_date": "2024-03-11",
+                    "end_date": "2024-06-17"
+                },
+                {
+                    "file": "C:\\SierraChart\\Data\\ESU24_FUT_CME.scid",
+                    "start_date": "2024-06-17",
+                    "end_date": "2024-09-16"
+                },
+                {
+                    "file": "C:\\SierraChart\\Data\\ESZ24_FUT_CME.scid",
+                    "start_date": "2024-09-16",
+                    "end_date": "2024-12-16"
+                },
+                {
+                    "file": "C:\\SierraChart\\Data\\ESH25_FUT_CME.scid",
+                    "start_date": "2024-12-16",
+                    "end_date": "2025-03-17"
+                },
+                {
+                    "file": "C:\\SierraChart\\Data\\ESM25_FUT_CME.scid",
+                    "start_date": "2025-03-17",
+                    "end_date": "2025-06-16"
+                },
+                {
+                    "file": "C:\\SierraChart\\Data\\ESU25_FUT_CME.scid",
+                    "start_date": "2025-06-16",
+                    "end_date": "2025-09-15"
+                },
+                {
+                    "file": "C:\\SierraChart\\Data\\ESZ25_FUT_CME.scid",
+                    "start_date": "2025-09-15",
+                    "end_date": "2025-12-15"
                 }
             ]
         }
