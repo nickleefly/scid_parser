@@ -41,7 +41,14 @@ Tables use `ReplacingMergeTree` engine — duplicates are removed during OPTIMIZ
 
 ## Data Storage
 
-Data is stored on the Windows host at `D:/clickhousedb`. Note that while running ClickHouse on Windows host mounts can have performance implications or issues with atomic renames, it allows for direct data access.
+Data is stored in Docker named volumes (`postgres_data` and `clickhouse_data`). This avoids permission issues and atomic rename failures commonly encountered when using Windows host mounts for database storage.
+
+To inspect the volumes:
+```bash
+docker volume ls
+docker volume inspect clickhouse_data
+```
+
 
 ## Popular Commands
 

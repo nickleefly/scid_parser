@@ -14,7 +14,7 @@ services:
     ports:
       - "5433:5432"
     volumes:
-      - D:/futureindexdb:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U postgres -d future_index" ]
       interval: 30s
@@ -33,7 +33,7 @@ services:
       - "8123:8123" # HTTP interface
       - "9000:9000" # Native interface
     volumes:
-      - D:/clickhousedb:/var/lib/clickhouse
+      - clickhouse_data:/var/lib/clickhouse
       - ./clickhouse-config/users.xml:/etc/clickhouse-server/users.d/users.xml
     ulimits:
       nofile:
@@ -45,3 +45,9 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+
+volumes:
+  postgres_data:
+  clickhouse_data:
+
+
