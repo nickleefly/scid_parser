@@ -33,10 +33,11 @@ This project manages the import of Sierra Chart Intraday Data (.scid) into a Tim
 - **Python 3.8+**: Required for the import scripts.
 
 ### 2. Installation
-Install the required Python packages:
+Install the required Python packages using `uv`:
 ```bash
-pip install -r requirements.txt
+uv sync
 ```
+*Tip: `uv` will automatically manage your virtual environment and install all dependencies listed in `pyproject.toml`.*
 
 ### 3. Database Setup
 Start the PostgreSQL/TimescaleDB container:

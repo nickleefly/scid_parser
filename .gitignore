@@ -67,3 +67,4 @@ venv.bak/
 Thumbs.db
 *.csv
 *.h5
+.python-version
