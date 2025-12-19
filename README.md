@@ -153,10 +153,10 @@ python resample_scid.py <input_scid_file> [output_file.csv|.h5] [price_multiplie
 **Terminal Examples:**
 ```bash
 # Basic conversion to CSV with 0.01 multiplier (for ES/NQ)
-python resample_scid.py C:\SierraChart\Data\ESZ25_FUT_CME.scid ESZ25_1min.csv 0.01
+python resample_scid.py C:\\SierraChart\\Data\\ESZ25_FUT_CME.scid ESZ25_1min.csv 0.01
 
 # Conversion to compact HDF5 format
-python resample_scid.py C:\SierraChart\Data\ESZ25_FUT_CME.scid ESZ25_1min.h5 0.01
+python resample_scid.py C:\\SierraChart\\Data\\ESZ25_FUT_CME.scid ESZ25_1min.h5 0.01
 ```
 
 > [!TIP]
