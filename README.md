@@ -9,6 +9,22 @@ This project manages the import of Sierra Chart Intraday Data (.scid) into a Tim
 | **Query/Backtest Speed** | Fast | Instant | Instant (after load) |
 | **SQL Support** | Full PostgreSQL | Good (Analytical) | No (Python/API only) |
 | **Management** | Easy (It's just Postgres) | Medium (Cluster mgmt) | Zero (It's a file) |
+| **Use Case** | Complex queries, long-term storage | High-speed analytics | Quick local research |
+
+## File Overview
+
+| File | Description |
+| :--- | :--- |
+| `data_sync.py` | Main entry point for syncing SCID data to TimescaleDB. Supports resume and contract rollovers. |
+| `clickhouse_sync.py` | Main entry point for syncing SCID data to ClickHouse. Optimized for extreme ingestion speed. |
+| `resample_scid.py` | High-performance script using `numpy.memmap` to convert SCID ticks to 1-minute OHLCV bars (CSV/HDF5). |
+| `h5_to_csv.py` | Utility to convert resampled HDF5 files (.h5) back to CSV format. |
+| `parser.py` | Core binary parser for Sierra Chart SCID files; handles date conversion and bundle trade markers. |
+| `db_manager.py` | Manages TimescaleDB connections, schema, and high-speed `COPY` commands. |
+| `clickhouse_manager.py` | Manages ClickHouse connections and schema management. |
+| `config.py` | Loads and validates your `config.json` setup. |
+| `verify_scid.py` | Quick utility to verify your SCID path and date range settings from `config.json`. |
+| `scid_to_h5_ticks.py` | Exports raw tick data from SCID to HDF5, respecting `config.json` date ranges. |
 
 ## How to Run
 
@@ -119,6 +135,64 @@ View the most recent 5 records from the `ES` table.
 
 docker-compose exec index-postgresql psql -U postgres -d future_index -c "SELECT * FROM \"ES\" ORDER BY datetime DESC LIMIT 5;"
 ```
+
+---
+
+## Resampling & Format Conversion
+
+This project provides utilities for high-performance data processing outside of the database workflows.
+
+### 1-Minute OHLCV Resampling
+Use `resample_scid.py` to generate 1-minute bars from raw SCID tick data. It uses memory mapping for extreme speed and supports CSV or HDF5 output.
+
+**Command Structure:**
+```bash
+python resample_scid.py <input_scid_file> [output_file.csv|.h5] [price_multiplier]
+```
+
+**Terminal Examples:**
+```bash
+# Basic conversion to CSV with 0.01 multiplier (for ES/NQ)
+python resample_scid.py C:\SierraChart\Data\ESZ25_FUT_CME.scid ESZ25_1min.csv 0.01
+
+# Conversion to compact HDF5 format
+python resample_scid.py C:\SierraChart\Data\ESZ25_FUT_CME.scid ESZ25_1min.h5 0.01
+```
+
+> [!TIP]
+> If you don't provide an output path, the script will perform the conversion in memory and display the first/last few rows for verification.
+
+### HDF5 to CSV Conversion
+If you use the compact HDF5 format for storage, use `h5_to_csv.py` to convert it back to CSV. The script automatically detects if the file contains raw ticks (from `scid_to_h5_ticks.py`) or resampled bars (from `resample_scid.py`).
+
+**Command Structure:**
+```bash
+python h5_to_csv.py <input_h5_file> <output_csv_file> [key]
+```
+
+**Terminal Example:**
+```bash
+# Automatically detects 'ticks' or 'data' key
+python h5_to_csv.py ESZ25_ticks.h5 ESZ25_ticks.csv
+
+# Or specify a custom key if needed
+python h5_to_csv.py ESZ25_test.h5 ESZ25_reconverted.csv data
+```
+
+### Raw Tick Export
+Use `scid_to_h5_ticks.py` to export every single tick within your `config.json` date range to a high-performance HDF5 file.
+
+**Command Structure:**
+```bash
+python scid_to_h5_ticks.py <input_scid_file> <output_h5_file> [price_multiplier]
+```
+
+**Terminal Example:**
+```bash
+python scid_to_h5_ticks.py C:\\SierraChart\\Data\\ESZ25_FUT_CME.scid ESZ25_ticks.h5 0.01
+```
+
+---
 
 ## Maintenance Tasks
 

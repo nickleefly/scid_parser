@@ -1,3 +1,11 @@
 # Database
 asyncpg>=0.29.0
 clickhouse-driver>=0.2.6
+
+# Data Processing
+pandas>=2.0.0
+numpy>=1.24.0
+
+# HDF5 Support
+tables>=3.8.0
+h5py>=3.8.0
