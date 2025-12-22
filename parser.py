@@ -308,16 +308,21 @@ if __name__ == "__main__":
             if count == 0:
                 print(f"Contract: {record.contract}")
                 print("-" * 100)
-                print(f"{'DateTime':40} | {'Open':15} | {'High':10} | {'Low':10} | {'Close':10} | {'Vol':6}")
-                print("-" * 100)
+                print(f"{'DateTime':26} | {'RawTime':18} | {'Open':10} | {'High':10} | {'Low':10} | {'Close':10} | {'Trd':5} | {'Vol':8} | {'Bid':8} | {'Ask':8} | {'Contract':8}")
+                print("-" * 145)
 
             print(
-                f"{record.datetime} | "
-                f"{record.open:15.2f} | "
+                f"{str(record.datetime):26} | "
+                f"{record.raw_time:18} | "
+                f"{record.open:10.2f} | "
                 f"{record.high:10.2f} | "
                 f"{record.low:10.2f} | "
                 f"{record.close:10.2f} | "
-                f"{record.volume:6}"
+                f"{record.num_trades:5} | "
+                f"{record.volume:8} | "
+                f"{record.bid_volume:8} | "
+                f"{record.ask_volume:8} | "
+                f"{record.contract:8}"
             )
 
             count += 1

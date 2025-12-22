@@ -24,9 +24,28 @@ docker-compose exec index-clickhouse clickhouse-client --query "SELECT count() F
 # Sample data
 docker-compose exec index-clickhouse clickhouse-client --query "SELECT * FROM future_index.ES ORDER BY datetime DESC LIMIT 5"
 
+# View Table Schema
+docker-compose exec index-clickhouse clickhouse-client --query "DESCRIBE future_index.ES"
+
 # Table size
 docker-compose exec index-clickhouse clickhouse-client --query "SELECT formatReadableSize(sum(bytes_on_disk)) FROM system.parts WHERE database = 'future_index'"
 ```
+
+### Schema Details
+
+| Column | Type | Description |
+| :--- | :--- | :--- |
+| `datetime` | `DateTime64(3, 'UTC')` | Central timestamp (millisecond precision) |
+| `raw_time` | `Int64` | Raw Sierra Chart microsecond timestamp |
+| `open` | `Float64` | Open price (often contains bundle markers) |
+| `high` | `Float64` | Period high price |
+| `low` | `Float64` | Period low price |
+| `close` | `Float64` | Period close price (actual trade price) |
+| `num_trades` | `UInt32` | Number of trades in this record |
+| `volume` | `UInt32` | Total volume |
+| `bid_volume` | `UInt32` | Volume traded at bid |
+| `ask_volume` | `UInt32` | Volume traded at ask |
+| `contract` | `String` | Contract symbol (e.g., `ESZ25`) |
 
 ## Resume & Deduplication
 
